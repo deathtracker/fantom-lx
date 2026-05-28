@@ -1,363 +1,400 @@
-// ============================================
-// FANTOM.LX AUTHENTICATION SYSTEM
-// Complete Version
-// ============================================
-
-class AuthSystem {
-    constructor() {
-        this.currentUser = null;
-        this.users = this.loadUsers();
-        this.sessions = this.loadSessions();
-        this.failedAttempts = this.loadFailedAttempts();
-        this.init();
-    }
-
-    init() {
-        this.checkSession();
-        this.setupEventListeners();
-        
-        const regPassword = document.getElementById('reg-password');
-        if (regPassword) {
-            regPassword.addEventListener('input', (e) => this.checkPasswordStrength(e.target.value));
-        }
-    }
-
-    setupEventListeners() {
-        const loginForm = document.getElementById('login-form');
-        if (loginForm) {
-            loginForm.addEventListener('submit', (e) => this.handleLogin(e));
-        }
-
-        const registerForm = document.getElementById('register-form');
-        if (registerForm) {
-            registerForm.addEventListener('submit', (e) => this.handleRegister(e));
-        }
-
-        const forgotForm = document.getElementById('forgot-form');
-        if (forgotForm) {
-            forgotForm.addEventListener('submit', (e) => this.handleForgotPassword(e));
-        }
-    }
-
-    // ============================================
-    // LOGIN
-    // ============================================
-    handleLogin(e) {
-        e.preventDefault();
-        
-        const email = document.getElementById('login-email').value.trim();
-        const password = document.getElementById('login-password').value;
-        const rememberMe = document.getElementById('remember-me').checked;
-
-        if (this.isRateLimited(email)) {
-            this.showError('login-error', 'Too many login attempts. Please wait 5 minutes.');
-            return;
-        }
-
-        const user = this.users.find(u => u.email.toLowerCase() === email.toLowerCase());
-
-        if (!user || !this.verifyPassword(password, user.password)) {
-            this.recordFailedAttempt(email);
-            this.showError('login-error', 'Invalid email or password.');
-            return;
-        }
-
-        this.createSession(user, rememberMe);
-        this.clearFailedAttempts(email);
-        window.location.href = 'dashboard.html';
-    }
-
-    // ============================================
-    // REGISTRATION
-    // ============================================
-    handleRegister(e) {
-        e.preventDefault();
-
-        const name = document.getElementById('reg-name').value.trim();
-        const email = document.getElementById('reg-email').value.trim();
-        const password = document.getElementById('reg-password').value;
-        const confirm = document.getElementById('reg-confirm').value;
-
-        if (!this.validateEmail(email)) {
-            this.showError('register-error', 'Please enter a valid email address.');
-            return;
-        }
-
-        if (password.length < 8) {
-            this.showError('register-error', 'Password must be at least 8 characters long.');
-            return;
-        }
-
-        if (password !== confirm) {
-            this.showError('register-error', 'Passwords do not match.');
-            return;
-        }
-
-        if (this.users.find(u => u.email.toLowerCase() === email.toLowerCase())) {
-            this.showError('register-error', 'An account with this email already exists.');
-            return;
-        }
-
-        const newUser = {
-            id: this.generateId(),
-            name: this.sanitize(name),
-            email: email.toLowerCase(),
-            password: this.hashPassword(password),
-            createdAt: new Date().toISOString(),
-            verified: false,
-            role: 'user'
-        };
-
-        this.users.push(newUser);
-        this.saveUsers();
-        this.createSession(newUser, true);
-        window.location.href = 'dashboard.html';
-    }
-
-    // ============================================
-    // PASSWORD RESET
-    // ============================================
-    handleForgotPassword(e) {
-        e.preventDefault();
-        
-        const email = document.getElementById('forgot-email').value.trim();
-        const user = this.users.find(u => u.email.toLowerCase() === email.toLowerCase());
-
-        if (user) {
-            const resetToken = this.generateResetToken();
-            user.resetToken = resetToken;
-            user.resetExpires = Date.now() + 3600000; // 1 hour
-            this.saveUsers();
-            
-            console.log(`Password reset link: ${window.location.origin}/reset-password.html?token=${resetToken}`);
-        }
-
-        this.showSuccess('forgot-message', 'If an account exists, a reset link has been sent to your email.');
-    }
-
-    // ============================================
-    // SESSION MANAGEMENT
-    // ============================================
-    createSession(user, rememberMe) {
-        const sessionToken = this.generateSessionToken();
-        const session = {
-            token: sessionToken,
-            userId: user.id,
-            createdAt: Date.now(),
-            expiresAt: rememberMe ? Date.now() + 2592000000 : Date.now() + 86400000, // 30 days or 1 day
-            rememberMe: rememberMe
-        };
-
-        this.sessions.push(session);
-        this.saveSessions();
-
-        if (rememberMe) {
-            localStorage.setItem('sessionToken', sessionToken);
-        } else {
-            sessionStorage.setItem('sessionToken', sessionToken);
-        }
-
-        this.currentUser = user;
-    }
-
-    checkSession() {
-        const token = localStorage.getItem('sessionToken') || sessionStorage.getItem('sessionToken');
-        
-        if (!token) return false;
-
-        const session = this.sessions.find(s => s.token === token);
-        
-        if (!session || session.expiresAt < Date.now()) {
-            this.logout();
-            return false;
-        }
-
-        const user = this.users.find(u => u.id === session.userId);
-        if (user) {
-            this.currentUser = user;
-            return true;
-        }
-
-        return false;
-    }
-
-    logout() {
-        localStorage.removeItem('sessionToken');
-        sessionStorage.removeItem('sessionToken');
-        this.currentUser = null;
-        window.location.href = 'login.html';
-    }
-
-    // ============================================
-    // SECURITY FUNCTIONS
-    // ============================================
-    hashPassword(password) {
-        // Simple hash for demo - USE BCRYPT IN PRODUCTION!
-        let hash = 0;
-        for (let i = 0; i < password.length; i++) {
-            const char = password.charCodeAt(i);
-            hash = ((hash << 5) - hash) + char;
-            hash = hash & hash;
-        }
-        return 'hash_' + Math.abs(hash).toString(16);
-    }
-
-    verifyPassword(password, hash) {
-        return this.hashPassword(password) === hash;
-    }
-
-    isRateLimited(email) {
-        const attempts = this.failedAttempts[email] || { count: 0, lastAttempt: 0 };
-        const fiveMinutesAgo = Date.now() - 300000;
-        
-        if (attempts.lastAttempt < fiveMinutesAgo) {
-            return false;
-        }
-        
-        return attempts.count >= 5;
-    }
-
-    recordFailedAttempt(email) {
-        if (!this.failedAttempts[email]) {
-            this.failedAttempts[email] = { count: 0, lastAttempt: 0 };
-        }
-        this.failedAttempts[email].count++;
-        this.failedAttempts[email].lastAttempt = Date.now();
-        this.saveFailedAttempts();
-    }
-
-    clearFailedAttempts(email) {
-        delete this.failedAttempts[email];
-        this.saveFailedAttempts();
-    }
-
-    sanitize(input) {
-        const div = document.createElement('div');
-        div.textContent = input;
-        return div.innerHTML;
-    }
-
-    validateEmail(email) {
-        return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-    }
-
-    checkPasswordStrength(password) {
-        let strength = 0;
-        const indicator = document.getElementById('password-strength');
-        
-        if (password.length >= 8) strength += 25;
-        if (password.length >= 12) strength += 25;
-        if (/[a-z]/.test(password) && /[A-Z]/.test(password)) strength += 25;
-        if (/\d/.test(password)) strength += 15;
-        if (/[^a-zA-Z\d]/.test(password)) strength += 10;
-
-        let color = '#e74c3c';
-        if (strength > 50) color = '#f39c12';
-        if (strength > 75) color = '#27ae60';
-
-        indicator.style.setProperty('--strength', `${strength}%`);
-        indicator.style.setProperty('--color', color);
-    }
-
-    // ============================================
-    // STORAGE
-    // ============================================
-    loadUsers() {
-        const stored = localStorage.getItem('fantom_users');
-        return stored ? JSON.parse(stored) : [];
-    }
-
-    saveUsers() {
-        localStorage.setItem('fantom_users', JSON.stringify(this.users));
-    }
-
-    loadSessions() {
-        const stored = localStorage.getItem('fantom_sessions');
-        return stored ? JSON.parse(stored) : [];
-    }
-
-    saveSessions() {
-        localStorage.setItem('fantom_sessions', JSON.stringify(this.sessions));
-    }
-
-    loadFailedAttempts() {
-        const stored = localStorage.getItem('fantom_failed_attempts');
-        return stored ? JSON.parse(stored) : {};
-    }
-
-    saveFailedAttempts() {
-        localStorage.setItem('fantom_failed_attempts', JSON.stringify(this.failedAttempts));
-    }
-
-    // ============================================
-    // UTILITIES
-    // ============================================
-    generateId() {
-        return 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-    }
-
-    generateSessionToken() {
-        return 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 16);
-    }
-
-    generateResetToken() {
-        return 'reset_' + Date.now() + '_' + Math.random().toString(36).substr(2, 16);
-    }
-
-    showError(elementId, message) {
-        const element = document.getElementById(elementId);
-        element.textContent = message;
-        element.classList.add('show');
-        setTimeout(() => element.classList.remove('show'), 5000);
-    }
-
-    showSuccess(elementId, message) {
-        const element = document.getElementById(elementId);
-        element.textContent = message;
-        element.classList.add('show');
-    }
-
-    getCurrentUser() {
-        return this.currentUser;
-    }
-
-    isLoggedIn() {
-        return this.currentUser !== null;
-    }
-
-    requireAuth() {
-        if (!this.isLoggedIn()) {
-            window.location.href = 'login.html';
-            return false;
-        }
-        return true;
-    }
-}
-
-// ============================================
-// TAB SWITCHING
-// ============================================
+// Tab switching
 function showTab(tabName) {
-    const forms = document.querySelectorAll('.auth-form');
-    forms.forEach(form => form.classList.remove('active'));
-
-    const tabs = document.querySelectorAll('.tab-btn');
-    tabs.forEach(tab => tab.classList.remove('active'));
-
+    // Hide all forms
+    document.querySelectorAll('.auth-form').forEach(form => {
+        form.classList.remove('active');
+    });
+    
+    // Remove active from all tab buttons
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    
+    // Show selected form
     if (tabName === 'login') {
         document.getElementById('login-form').classList.add('active');
         document.querySelectorAll('.tab-btn')[0].classList.add('active');
-    } else if (tabName === 'register') {
-        document.getElementById('register-form').classList.add('active');
+        clearMessages();
+    } else if (tabName === 'signup') {
+        document.getElementById('signup-form').classList.add('active');
         document.querySelectorAll('.tab-btn')[1].classList.add('active');
+        clearMessages();
     }
 }
 
+// Show forgot password form
 function showForgotPassword() {
-    const forms = document.querySelectorAll('.auth-form');
-    forms.forEach(form => form.classList.remove('active'));
+    document.querySelectorAll('.auth-form').forEach(form => {
+        form.classList.remove('active');
+    });
     document.getElementById('forgot-form').classList.add('active');
+    clearMessages();
 }
 
-// Initialize the auth system
-const auth = new AuthSystem();
+// Toggle password visibility
+function togglePassword(inputId) {
+    const input = document.getElementById(inputId);
+    const button = input.parentElement.querySelector('.toggle-password');
+    
+    if (input.type === 'password') {
+        input.type = 'text';
+        button.innerHTML = `
+            <svg class="eye-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+                <line x1="1" y1="1" x2="23" y2="23"></line>
+            </svg>
+        `;
+    } else {
+        input.type = 'password';
+        button.innerHTML = `
+            <svg class="eye-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                <circle cx="12" cy="12" r="3"></circle>
+            </svg>
+        `;
+    }
+}
+
+// Clear all messages
+function clearMessages() {
+    document.querySelectorAll('.error-message, .success-message').forEach(msg => {
+        msg.textContent = '';
+        msg.style.display = 'none';
+    });
+}
+
+// Show error message
+function showError(formId, message) {
+    const errorDiv = document.getElementById(`${formId}-error`);
+    errorDiv.textContent = message;
+    errorDiv.style.display = 'block';
+    setTimeout(() => {
+        errorDiv.style.display = 'none';
+    }, 5000);
+}
+
+// Show success message
+function showSuccess(formId, message) {
+    const successDiv = document.getElementById(`${formId}-success`);
+    successDiv.textContent = message;
+    successDiv.style.display = 'block';
+}
+
+// Validate email format
+function isValidEmail(email) {
+    const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return re.test(email);
+}
+
+// Password strength checker
+function checkPasswordStrength(password) {
+    let strength = 0;
+    const strengthBar = document.getElementById('password-strength');
+    
+    if (!strengthBar) return;
+    
+    if (password.length >= 8) strength++;
+    if (password.length >= 12) strength++;
+    if (/[a-z]/.test(password) && /[A-Z]/.test(password)) strength++;
+    if (/\d/.test(password)) strength++;
+    if (/[^a-zA-Z\d]/.test(password)) strength++;
+    
+    strengthBar.innerHTML = '';
+    strengthBar.className = 'password-strength';
+    
+    if (password.length === 0) {
+        return;
+    }
+    
+    if (strength <= 2) {
+        strengthBar.innerHTML = '<span class="weak">Weak</span>';
+        strengthBar.classList.add('weak');
+    } else if (strength <= 3) {
+        strengthBar.innerHTML = '<span class="medium">Medium</span>';
+        strengthBar.classList.add('medium');
+    } else {
+        strengthBar.innerHTML = '<span class="strong">Strong</span>';
+        strengthBar.classList.add('strong');
+    }
+}
+
+// Password validation
+function isValidPassword(password) {
+    // Minimum 8 characters, at least one uppercase, one lowercase, and one number
+    const re = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
+    return re.test(password);
+}
+
+// Set loading state
+function setLoading(button, isLoading) {
+    const btnText = button.querySelector('.btn-text');
+    const btnLoader = button.querySelector('.btn-loader');
+    
+    if (isLoading) {
+        btnText.style.display = 'none';
+        btnLoader.style.display = 'inline-block';
+        button.disabled = true;
+    } else {
+        btnText.style.display = 'inline';
+        btnLoader.style.display = 'none';
+        button.disabled = false;
+    }
+}
+
+// Initialize - Add event listeners when DOM is loaded
+document.addEventListener('DOMContentLoaded', function() {
+    
+    // Password strength checker on signup
+    const signupPassword = document.getElementById('signup-password');
+    if (signupPassword) {
+        signupPassword.addEventListener('input', function() {
+            checkPasswordStrength(this.value);
+        });
+    }
+    
+    // Login form submission
+    const loginForm = document.getElementById('login-form');
+    if (loginForm) {
+        loginForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            clearMessages();
+            
+            const email = document.getElementById('login-email').value.trim();
+            const password = document.getElementById('login-password').value;
+            const rememberMe = document.getElementById('remember-me').checked;
+            const submitBtn = this.querySelector('.btn-primary');
+            
+            // Validation
+            if (!email || !password) {
+                showError('login', 'Please fill in all fields');
+                return;
+            }
+            
+            if (!isValidEmail(email)) {
+                showError('login', 'Please enter a valid email address');
+                return;
+            }
+            
+            setLoading(submitBtn, true);
+            
+            // Simulate API call - REPLACE THIS WITH YOUR ACTUAL API
+            setTimeout(() => {
+                // Demo credentials for testing
+                if (email === 'demo@fantom.lx' && password === 'Demo123!') {
+                    // Store auth token (in production, use httpOnly cookies)
+                    if (rememberMe) {
+                        localStorage.setItem('authToken', 'demo-token-12345');
+                        localStorage.setItem('userEmail', email);
+                    } else {
+                        sessionStorage.setItem('authToken', 'demo-token-12345');
+                        sessionStorage.setItem('userEmail', email);
+                    }
+                    
+                    showSuccess('login', 'Login successful! Redirecting...');
+                    
+                    // Redirect to dashboard
+                    setTimeout(() => {
+                        window.location.href = 'dashboard.html';
+                    }, 1000);
+                } else {
+                    setLoading(submitBtn, false);
+                    showError('login', 'Invalid email or password. Try demo@fantom.lx / Demo123!');
+                }
+            }, 1500);
+            
+            /* PRODUCTION CODE - Replace the above with:
+            
+            try {
+                const response = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ email, password, rememberMe })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    // Store token securely
+                    if (rememberMe) {
+                        localStorage.setItem('authToken', data.token);
+                        localStorage.setItem('userEmail', email);
+                    } else {
+                        sessionStorage.setItem('authToken', data.token);
+                        sessionStorage.setItem('userEmail', email);
+                    }
+                    
+                    showSuccess('login', 'Login successful! Redirecting...');
+                    setTimeout(() => {
+                        window.location.href = 'dashboard.html';
+                    }, 1000);
+                } else {
+                    showError('login', data.message || 'Login failed. Please try again.');
+                }
+            } catch (error) {
+                showError('login', 'Network error. Please check your connection.');
+            } finally {
+                setLoading(submitBtn, false);
+            }
+            */
+        });
+    }
+    
+    // Signup form submission
+    const signupForm = document.getElementById('signup-form');
+    if (signupForm) {
+        signupForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            clearMessages();
+            
+            const name = document.getElementById('signup-name').value.trim();
+            const email = document.getElementById('signup-email').value.trim();
+            const password = document.getElementById('signup-password').value;
+            const confirmPassword = document.getElementById('signup-confirm').value;
+            const termsAgree = document.getElementById('terms-agree').checked;
+            const submitBtn = this.querySelector('.btn-primary');
+            
+            // Validation
+            if (!name || !email || !password || !confirmPassword) {
+                showError('signup', 'Please fill in all fields');
+                return;
+            }
+            
+            if (!isValidEmail(email)) {
+                showError('signup', 'Please enter a valid email address');
+                return;
+            }
+            
+            if (!isValidPassword(password)) {
+                showError('signup', 'Password must be at least 8 characters with uppercase, lowercase, and number');
+                return;
+            }
+            
+            if (password !== confirmPassword) {
+                showError('signup', 'Passwords do not match');
+                return;
+            }
+            
+            if (!termsAgree) {
+                showError('signup', 'Please accept the Terms of Service and Privacy Policy');
+                return;
+            }
+            
+            setLoading(submitBtn, true);
+            
+            // Simulate API call - REPLACE THIS WITH YOUR ACTUAL API
+            setTimeout(() => {
+                showSuccess('signup', 'Account created successfully! Redirecting to login...');
+                setTimeout(() => {
+                    showTab('login');
+                    document.getElementById('login-email').value = email;
+                    signupForm.reset();
+                }, 2000);
+                setLoading(submitBtn, false);
+            }, 1500);
+            
+            /* PRODUCTION CODE - Replace the above with:
+            
+            try {
+                const response = await fetch('/api/auth/signup', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ name, email, password })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showSuccess('signup', 'Account created successfully! Please check your email to verify.');
+                    setTimeout(() => {
+                        showTab('login');
+                        document.getElementById('login-email').value = email;
+                        signupForm.reset();
+                    }, 2000);
+                } else {
+                    showError('signup', data.message || 'Signup failed. Please try again.');
+                }
+            } catch (error) {
+                showError('signup', 'Network error. Please check your connection.');
+            } finally {
+                setLoading(submitBtn, false);
+            }
+            */
+        });
+    }
+    
+    // Forgot password form submission
+    const forgotForm = document.getElementById('forgot-form');
+    if (forgotForm) {
+        forgotForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            clearMessages();
+            
+            const email = document.getElementById('forgot-email').value.trim();
+            const submitBtn = this.querySelector('.btn-primary');
+            
+            if (!email) {
+                showError('forgot', 'Please enter your email address');
+                return;
+            }
+            
+            if (!isValidEmail(email)) {
+                showError('forgot', 'Please enter a valid email address');
+                return;
+            }
+            
+            setLoading(submitBtn, true);
+            
+            // Simulate API call
+            setTimeout(() => {
+                showSuccess('forgot', 'Password reset link sent! Check your email.');
+                setTimeout(() => {
+                    forgotForm.reset();
+                }, 3000);
+                setLoading(submitBtn, false);
+            }, 1500);
+            
+            /* PRODUCTION CODE:
+            
+            try {
+                const response = await fetch('/api/auth/forgot-password', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ email })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showSuccess('forgot', 'Password reset link sent! Check your email.');
+                    setTimeout(() => {
+                        forgotForm.reset();
+                    }, 3000);
+                } else {
+                    showError('forgot', data.message || 'Failed to send reset link.');
+                }
+            } catch (error) {
+                showError('forgot', 'Network error. Please try again.');
+            } finally {
+                setLoading(submitBtn, false);
+            }
+            */
+        });
+    }
+});
+
+// Check if user is already logged in
+function checkAuth() {
+    const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
+    if (token && window.location.pathname.includes('login.html')) {
+        window.location.href = 'dashboard.html';
+    }
+}
+
+// Run auth check on page load
+checkAuth();
