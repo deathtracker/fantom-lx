@@ -1,5 +1,6 @@
 // ============================================
 // FANTOM.LX AUTHENTICATION SYSTEM
+// Complete Version
 // ============================================
 
 class AuthSystem {
@@ -7,18 +8,14 @@ class AuthSystem {
         this.currentUser = null;
         this.users = this.loadUsers();
         this.sessions = this.loadSessions();
-        this.failedAttempts = {};
+        this.failedAttempts = this.loadFailedAttempts();
         this.init();
     }
 
     init() {
-        // Check if user is already logged in
         this.checkSession();
-        
-        // Set up event listeners
         this.setupEventListeners();
         
-        // Check password strength in real-time
         const regPassword = document.getElementById('reg-password');
         if (regPassword) {
             regPassword.addEventListener('input', (e) => this.checkPasswordStrength(e.target.value));
@@ -26,19 +23,16 @@ class AuthSystem {
     }
 
     setupEventListeners() {
-        // Login form
         const loginForm = document.getElementById('login-form');
         if (loginForm) {
             loginForm.addEventListener('submit', (e) => this.handleLogin(e));
         }
 
-        // Register form
         const registerForm = document.getElementById('register-form');
         if (registerForm) {
             registerForm.addEventListener('submit', (e) => this.handleRegister(e));
         }
 
-        // Forgot password form
         const forgotForm = document.getElementById('forgot-form');
         if (forgotForm) {
             forgotForm.addEventListener('submit', (e) => this.handleForgotPassword(e));
@@ -46,7 +40,7 @@ class AuthSystem {
     }
 
     // ============================================
-    // LOGIN FUNCTIONALITY
+    // LOGIN
     // ============================================
     handleLogin(e) {
         e.preventDefault();
@@ -55,38 +49,26 @@ class AuthSystem {
         const password = document.getElementById('login-password').value;
         const rememberMe = document.getElementById('remember-me').checked;
 
-        // Rate limiting check
         if (this.isRateLimited(email)) {
             this.showError('login-error', 'Too many login attempts. Please wait 5 minutes.');
             return;
         }
 
-        // Find user
         const user = this.users.find(u => u.email.toLowerCase() === email.toLowerCase());
 
-        if (!user) {
+        if (!user || !this.verifyPassword(password, user.password)) {
             this.recordFailedAttempt(email);
             this.showError('login-error', 'Invalid email or password.');
             return;
         }
 
-        // Verify password (in production, use bcrypt)
-        if (!this.verifyPassword(password, user.password)) {
-            this.recordFailedAttempt(email);
-            this.showError('login-error', 'Invalid email or password.');
-            return;
-        }
-
-        // Successful login
         this.createSession(user, rememberMe);
         this.clearFailedAttempts(email);
-        
-        // Redirect to dashboard
         window.location.href = 'dashboard.html';
     }
 
     // ============================================
-    // REGISTRATION FUNCTIONALITY
+    // REGISTRATION
     // ============================================
     handleRegister(e) {
         e.preventDefault();
@@ -96,7 +78,6 @@ class AuthSystem {
         const password = document.getElementById('reg-password').value;
         const confirm = document.getElementById('reg-confirm').value;
 
-        // Validation
         if (!this.validateEmail(email)) {
             this.showError('register-error', 'Please enter a valid email address.');
             return;
@@ -112,13 +93,11 @@ class AuthSystem {
             return;
         }
 
-        // Check if user already exists
         if (this.users.find(u => u.email.toLowerCase() === email.toLowerCase())) {
             this.showError('register-error', 'An account with this email already exists.');
             return;
         }
 
-        // Create new user
         const newUser = {
             id: this.generateId(),
             name: this.sanitize(name),
@@ -126,16 +105,12 @@ class AuthSystem {
             password: this.hashPassword(password),
             createdAt: new Date().toISOString(),
             verified: false,
-            plan: 'free'
+            role: 'user'
         };
 
         this.users.push(newUser);
         this.saveUsers();
-
-        // Auto-login after registration
         this.createSession(newUser, true);
-        
-        // Redirect to dashboard
         window.location.href = 'dashboard.html';
     }
 
@@ -146,104 +121,78 @@ class AuthSystem {
         e.preventDefault();
         
         const email = document.getElementById('forgot-email').value.trim();
-        
-        // Check if user exists (in production, don't reveal this)
         const user = this.users.find(u => u.email.toLowerCase() === email.toLowerCase());
-        
-        // Always show success message for security
-        this.showSuccess('forgot-message', 'If an account exists with this email, you will receive a password reset link.');
-        
-        // In production, send actual email here
+
         if (user) {
-            const resetToken = this.generateResetToken(user);
-            console.log('Password reset token:', resetToken);
-            // TODO: Send email with reset link
+            const resetToken = this.generateResetToken();
+            user.resetToken = resetToken;
+            user.resetExpires = Date.now() + 3600000; // 1 hour
+            this.saveUsers();
+            
+            console.log(`Password reset link: ${window.location.origin}/reset-password.html?token=${resetToken}`);
         }
-        
-        setTimeout(() => {
-            showTab('login');
-        }, 3000);
+
+        this.showSuccess('forgot-message', 'If an account exists, a reset link has been sent to your email.');
     }
 
     // ============================================
     // SESSION MANAGEMENT
     // ============================================
     createSession(user, rememberMe) {
+        const sessionToken = this.generateSessionToken();
         const session = {
+            token: sessionToken,
             userId: user.id,
-            token: this.generateToken(),
-            createdAt: new Date().toISOString(),
-            expiresAt: rememberMe 
-                ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() // 30 days
-                : new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() // 24 hours
+            createdAt: Date.now(),
+            expiresAt: rememberMe ? Date.now() + 2592000000 : Date.now() + 86400000, // 30 days or 1 day
+            rememberMe: rememberMe
         };
 
-        // Store session
+        this.sessions.push(session);
+        this.saveSessions();
+
         if (rememberMe) {
-            localStorage.setItem('fantom_session', JSON.stringify(session));
+            localStorage.setItem('sessionToken', sessionToken);
         } else {
-            sessionStorage.setItem('fantom_session', JSON.stringify(session));
+            sessionStorage.setItem('sessionToken', sessionToken);
         }
 
         this.currentUser = user;
     }
 
     checkSession() {
-        const session = JSON.parse(localStorage.getItem('fantom_session') || sessionStorage.getItem('fantom_session') || 'null');
+        const token = localStorage.getItem('sessionToken') || sessionStorage.getItem('sessionToken');
         
-        if (!session) return null;
+        if (!token) return false;
 
-        // Check if session is expired
-        if (new Date(session.expiresAt) < new Date()) {
+        const session = this.sessions.find(s => s.token === token);
+        
+        if (!session || session.expiresAt < Date.now()) {
             this.logout();
-            return null;
+            return false;
         }
 
-        // Find user
         const user = this.users.find(u => u.id === session.userId);
         if (user) {
             this.currentUser = user;
-            return user;
+            return true;
         }
 
-        return null;
+        return false;
     }
 
     logout() {
-        localStorage.removeItem('fantom_session');
-        sessionStorage.removeItem('fantom_session');
+        localStorage.removeItem('sessionToken');
+        sessionStorage.removeItem('sessionToken');
         this.currentUser = null;
         window.location.href = 'login.html';
     }
 
     // ============================================
-    // SECURITY FEATURES
+    // SECURITY FUNCTIONS
     // ============================================
-    isRateLimited(email) {
-        const attempts = this.failedAttempts[email];
-        if (!attempts) return false;
-
-        const now = Date.now();
-        const recentAttempts = attempts.filter(time => now - time < 5 * 60 * 1000); // 5 minutes
-
-        return recentAttempts.length >= 5;
-    }
-
-    recordFailedAttempt(email) {
-        if (!this.failedAttempts[email]) {
-            this.failedAttempts[email] = [];
-        }
-        this.failedAttempts[email].push(Date.now());
-    }
-
-    clearFailedAttempts(email) {
-        delete this.failedAttempts[email];
-    }
-
-    // Simple password hashing (use bcrypt in production!)
     hashPassword(password) {
-        // This is NOT secure - only for demo purposes
-        // In production, use bcrypt or Argon2 on the server
+        // Simple hash for demo - USE BCRYPT IN PRODUCTION!
         let hash = 0;
         for (let i = 0; i < password.length; i++) {
             const char = password.charCodeAt(i);
@@ -253,96 +202,69 @@ class AuthSystem {
         return 'hash_' + Math.abs(hash).toString(16);
     }
 
-    verifyPassword(password, hashedPassword) {
-        return this.hashPassword(password) === hashedPassword;
+    verifyPassword(password, hash) {
+        return this.hashPassword(password) === hash;
     }
 
-    // ============================================
-    // VALIDATION & SANITIZATION
-    // ============================================
-    validateEmail(email) {
-        const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        return re.test(email);
+    isRateLimited(email) {
+        const attempts = this.failedAttempts[email] || { count: 0, lastAttempt: 0 };
+        const fiveMinutesAgo = Date.now() - 300000;
+        
+        if (attempts.lastAttempt < fiveMinutesAgo) {
+            return false;
+        }
+        
+        return attempts.count >= 5;
+    }
+
+    recordFailedAttempt(email) {
+        if (!this.failedAttempts[email]) {
+            this.failedAttempts[email] = { count: 0, lastAttempt: 0 };
+        }
+        this.failedAttempts[email].count++;
+        this.failedAttempts[email].lastAttempt = Date.now();
+        this.saveFailedAttempts();
+    }
+
+    clearFailedAttempts(email) {
+        delete this.failedAttempts[email];
+        this.saveFailedAttempts();
     }
 
     sanitize(input) {
-        // Remove HTML tags and dangerous characters
-        return input.replace(/[<>\"\']/g, '').trim();
+        const div = document.createElement('div');
+        div.textContent = input;
+        return div.innerHTML;
+    }
+
+    validateEmail(email) {
+        return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
     }
 
     checkPasswordStrength(password) {
-        const strengthBar = document.getElementById('password-strength');
-        if (!strengthBar) return;
-
         let strength = 0;
-        let color = '#e74c3c';
-
+        const indicator = document.getElementById('password-strength');
+        
         if (password.length >= 8) strength += 25;
         if (password.length >= 12) strength += 25;
         if (/[a-z]/.test(password) && /[A-Z]/.test(password)) strength += 25;
         if (/\d/.test(password)) strength += 15;
-        if (/[^a-zA-Z0-9]/.test(password)) strength += 10;
+        if (/[^a-zA-Z\d]/.test(password)) strength += 10;
 
-        if (strength >= 75) color = '#27ae60';
-        else if (strength >= 50) color = '#f39c12';
+        let color = '#e74c3c';
+        if (strength > 50) color = '#f39c12';
+        if (strength > 75) color = '#27ae60';
 
-        strengthBar.style.setProperty('--strength', strength + '%');
-        strengthBar.style.setProperty('--color', color);
+        indicator.style.setProperty('--strength', `${strength}%`);
+        indicator.style.setProperty('--color', color);
     }
 
     // ============================================
-    // UTILITY FUNCTIONS
-    // ============================================
-    generateId() {
-        return 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-    }
-
-    generateToken() {
-        return Array.from({length: 32}, () => 
-            Math.floor(Math.random() * 16).toString(16)
-        ).join('');
-    }
-
-    generateResetToken(user) {
-        const token = this.generateToken();
-        // In production, store this token with expiration in database
-        return token;
-    }
-
-    showError(elementId, message) {
-        const errorElement = document.getElementById(elementId);
-        if (errorElement) {
-            errorElement.textContent = message;
-            errorElement.classList.add('show');
-            setTimeout(() => errorElement.classList.remove('show'), 5000);
-        }
-    }
-
-    showSuccess(elementId, message) {
-        const successElement = document.getElementById(elementId);
-        if (successElement) {
-            successElement.textContent = message;
-            successElement.classList.add('show');
-        }
-    }
-
-    // ============================================
-    // DATA PERSISTENCE
+    // STORAGE
     // ============================================
     loadUsers() {
         const stored = localStorage.getItem('fantom_users');
-        return stored ? JSON.parse(stored) : [
-            // Demo account
-            {
-                id: 'demo_user',
-                name: 'Demo User',
-                email: 'demo@fantom.lx',
-                password: this.hashPassword('demo1234'),
-                createdAt: new Date().toISOString(),
-                verified: true,
-                plan: 'pro'
-            }
-        ];
+        return stored ? JSON.parse(stored) : [];
     }
 
     saveUsers() {
@@ -351,21 +273,64 @@ class AuthSystem {
 
     loadSessions() {
         const stored = localStorage.getItem('fantom_sessions');
-        return stored ? JSON.parse(stored) : {};
+        return stored ? JSON.parse(stored) : [];
     }
 
     saveSessions() {
         localStorage.setItem('fantom_sessions', JSON.stringify(this.sessions));
     }
 
-    // Get current user data
+    loadFailedAttempts() {
+        const stored = localStorage.getItem('fantom_failed_attempts');
+        return stored ? JSON.parse(stored) : {};
+    }
+
+    saveFailedAttempts() {
+        localStorage.setItem('fantom_failed_attempts', JSON.stringify(this.failedAttempts));
+    }
+
+    // ============================================
+    // UTILITIES
+    // ============================================
+    generateId() {
+        return 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    }
+
+    generateSessionToken() {
+        return 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 16);
+    }
+
+    generateResetToken() {
+        return 'reset_' + Date.now() + '_' + Math.random().toString(36).substr(2, 16);
+    }
+
+    showError(elementId, message) {
+        const element = document.getElementById(elementId);
+        element.textContent = message;
+        element.classList.add('show');
+        setTimeout(() => element.classList.remove('show'), 5000);
+    }
+
+    showSuccess(elementId, message) {
+        const element = document.getElementById(elementId);
+        element.textContent = message;
+        element.classList.add('show');
+    }
+
     getCurrentUser() {
         return this.currentUser;
     }
 
-    // Check if user is authenticated
-    isAuthenticated() {
+    isLoggedIn() {
         return this.currentUser !== null;
+    }
+
+    requireAuth() {
+        if (!this.isLoggedIn()) {
+            window.location.href = 'login.html';
+            return false;
+        }
+        return true;
     }
 }
 
@@ -373,37 +338,26 @@ class AuthSystem {
 // TAB SWITCHING
 // ============================================
 function showTab(tabName) {
-    // Hide all forms
-    document.querySelectorAll('.auth-form').forEach(form => {
-        form.classList.remove('active');
-    });
+    const forms = document.querySelectorAll('.auth-form');
+    forms.forEach(form => form.classList.remove('active'));
 
-    // Remove active state from all tab buttons
-    document.querySelectorAll('.tab-btn').forEach(btn => {
-        btn.classList.remove('active');
-    });
+    const tabs = document.querySelectorAll('.tab-btn');
+    tabs.forEach(tab => tab.classList.remove('active'));
 
-    // Show selected form
     if (tabName === 'login') {
         document.getElementById('login-form').classList.add('active');
-        document.querySelector('.tab-btn:first-child').classList.add('active');
+        document.querySelectorAll('.tab-btn')[0].classList.add('active');
     } else if (tabName === 'register') {
         document.getElementById('register-form').classList.add('active');
-        document.querySelector('.tab-btn:last-child').classList.add('active');
-    } else if (tabName === 'forgot') {
-        document.getElementById('forgot-form').classList.add('active');
+        document.querySelectorAll('.tab-btn')[1].classList.add('active');
     }
 }
 
 function showForgotPassword() {
-    showTab('forgot');
-    return false;
+    const forms = document.querySelectorAll('.auth-form');
+    forms.forEach(form => form.classList.remove('active'));
+    document.getElementById('forgot-form').classList.add('active');
 }
 
-// Initialize auth system when page loads
+// Initialize the auth system
 const auth = new AuthSystem();
-
-// Export for use in other scripts
-if (typeof window !== 'undefined') {
-    window.FantomAuth = auth;
-}
