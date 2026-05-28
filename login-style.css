@@ -1,141 +1,437 @@
-// Firebase configuration will be added here
-// For now, using localStorage for demo purposes
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
 
-document.addEventListener('DOMContentLoaded', function() {
-    // Tab switching
-    window.showTab = function(tab) {
-        const forms = document.querySelectorAll('.auth-form');
-        const buttons = document.querySelectorAll('.tab-btn');
-        
-        forms.forEach(form => form.classList.remove('active'));
-        buttons.forEach(btn => btn.classList.remove('active'));
-        
-        if (tab === 'login') {
-            document.getElementById('login-form').classList.add('active');
-            buttons[0].classList.add('active');
-        } else if (tab === 'register') {
-            document.getElementById('register-form').classList.add('active');
-            buttons[1].classList.add('active');
-        }
-    };
+:root {
+    --primary-color: #00ff88;
+    --primary-dark: #00cc6a;
+    --bg-dark: #0a0a0a;
+    --bg-card: #1a1a1a;
+    --text-primary: #ffffff;
+    --text-secondary: #a0a0a0;
+    --error-color: #ff4444;
+    --success-color: #00ff88;
+    --border-color: #2a2a2a;
+    --input-bg: #0f0f0f;
+}
 
-    window.showForgotPassword = function() {
-        const forms = document.querySelectorAll('.auth-form');
-        const buttons = document.querySelectorAll('.tab-btn');
-        
-        forms.forEach(form => form.classList.remove('active'));
-        buttons.forEach(btn => btn.classList.remove('active'));
-        
-        document.getElementById('forgot-form').classList.add('active');
-    };
+body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg-dark);
+    color: var(--text-primary);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 50%, #0a0a0a 100%);
+    position: relative;
+    overflow: hidden;
+}
 
-    // Login form handler
-    document.getElementById('login-form').addEventListener('submit', function(e) {
-        e.preventDefault();
-        
-        const email = document.getElementById('login-email').value;
-        const password = document.getElementById('login-password').value;
-        const errorDiv = document.getElementById('login-error');
-        
-        // Get stored users
-        const users = JSON.parse(localStorage.getItem('users') || '[]');
-        const user = users.find(u => u.email === email);
-        
-        if (!user) {
-            errorDiv.textContent = 'Email not found. Please register first.';
-            errorDiv.style.display = 'block';
-            return;
-        }
-        
-        if (user.password !== password) {
-            errorDiv.textContent = 'Incorrect password. Please try again.';
-            errorDiv.style.display = 'block';
-            return;
-        }
-        
-        // Successful login
-        localStorage.setItem('currentUser', JSON.stringify(user));
-        window.location.href = 'dashboard.html';
-    });
+body::before {
+    content: '';
+    position: absolute;
+    width: 500px;
+    height: 500px;
+    background: radial-gradient(circle, rgba(0, 255, 136, 0.1) 0%, transparent 70%);
+    top: -250px;
+    right: -250px;
+    pointer-events: none;
+}
 
-    // Register form handler
-    document.getElementById('register-form').addEventListener('submit', function(e) {
-        e.preventDefault();
-        
-        const name = document.getElementById('reg-name').value;
-        const email = document.getElementById('reg-email').value;
-        const password = document.getElementById('reg-password').value;
-        const confirm = document.getElementById('reg-confirm').value;
-        const errorDiv = document.getElementById('register-error');
-        
-        // Validation
-        if (password.length < 8) {
-            errorDiv.textContent = 'Password must be at least 8 characters long.';
-            errorDiv.style.display = 'block';
-            return;
-        }
-        
-        if (password !== confirm) {
-            errorDiv.textContent = 'Passwords do not match.';
-            errorDiv.style.display = 'block';
-            return;
-        }
-        
-        // Check if email already exists
-        const users = JSON.parse(localStorage.getItem('users') || '[]');
-        if (users.find(u => u.email === email)) {
-            errorDiv.textContent = 'Email already registered. Please login.';
-            errorDiv.style.display = 'block';
-            return;
-        }
-        
-        // Create new user
-        const newUser = { name, email, password };
-        users.push(newUser);
-        localStorage.setItem('users', JSON.stringify(users));
-        
-        // Auto login
-        localStorage.setItem('currentUser', JSON.stringify(newUser));
-        window.location.href = 'dashboard.html';
-    });
+body::after {
+    content: '';
+    position: absolute;
+    width: 500px;
+    height: 500px;
+    background: radial-gradient(circle, rgba(0, 255, 136, 0.08) 0%, transparent 70%);
+    bottom: -250px;
+    left: -250px;
+    pointer-events: none;
+}
 
-    // Password strength indicator
-    document.getElementById('reg-password').addEventListener('input', function(e) {
-        const password = e.target.value;
-        const strengthDiv = document.getElementById('password-strength');
-        
-        let strength = 0;
-        if (password.length >= 8) strength++;
-        if (/[0-9]/.test(password)) strength++;
-        if (/[^A-Za-z0-9]/.test(password)) strength++;
-        if (/[A-Z]/.test(password) && /[a-z]/.test(password)) strength++;
-        
-        const levels = ['Weak', 'Fair', 'Good', 'Strong'];
-        const colors = ['#ff4444', '#ffaa00', '#44aaff', '#44ff44'];
-        
-        if (password.length > 0) {
-            strengthDiv.textContent = levels[strength - 1] || 'Weak';
-            strengthDiv.style.color = colors[strength - 1] || '#ff4444';
-            strengthDiv.style.display = 'block';
-        } else {
-            strengthDiv.style.display = 'none';
-        }
-    });
+.login-container {
+    width: 100%;
+    max-width: 480px;
+    position: relative;
+    z-index: 1;
+}
 
-    // Forgot password handler
-    document.getElementById('forgot-form').addEventListener('submit', function(e) {
-        e.preventDefault();
-        
-        const email = document.getElementById('forgot-email').value;
-        const messageDiv = document.getElementById('forgot-message');
-        
-        // Simulate sending reset link
-        messageDiv.textContent = `Password reset link sent to ${email}. Please check your inbox.`;
-        messageDiv.style.display = 'block';
-        
-        setTimeout(() => {
-            showTab('login');
-            messageDiv.style.display = 'none';
-        }, 3000);
-    });
-});
+.login-box {
+    background: var(--bg-card);
+    border-radius: 24px;
+    padding: 48px;
+    border: 1px solid var(--border-color);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(10px);
+}
+
+.logo {
+    text-align: center;
+    margin-bottom: 40px;
+}
+
+.logo h1 {
+    font-family: 'Syne', sans-serif;
+    font-size: 42px;
+    font-weight: 800;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+    letter-spacing: -1px;
+}
+
+.logo h1 span {
+    color: var(--primary-color);
+}
+
+.logo p {
+    color: var(--text-secondary);
+    font-size: 14px;
+}
+
+.tab-buttons {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 32px;
+    background: var(--input-bg);
+    padding: 6px;
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+}
+
+.tab-btn {
+    flex: 1;
+    padding: 12px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 15px;
+    font-weight: 600;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.tab-btn:hover {
+    color: var(--text-primary);
+}
+
+.tab-btn.active {
+    background: var(--primary-color);
+    color: var(--bg-dark);
+}
+
+.auth-form {
+    display: none;
+}
+
+.auth-form.active {
+    display: block;
+    animation: fadeIn 0.4s ease;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.auth-form h2 {
+    font-family: 'Syne', sans-serif;
+    font-size: 28px;
+    font-weight: 700;
+    margin-bottom: 8px;
+    color: var(--text-primary);
+}
+
+.subtitle {
+    color: var(--text-secondary);
+    font-size: 14px;
+    margin-bottom: 28px;
+}
+
+.input-group {
+    margin-bottom: 24px;
+}
+
+.input-group label {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.input-group input {
+    width: 100%;
+    padding: 14px 16px;
+    background: var(--input-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    color: var(--text-primary);
+    font-size: 15px;
+    font-family: 'DM Sans', sans-serif;
+    transition: all 0.3s ease;
+}
+
+.input-group input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(0, 255, 136, 0.1);
+}
+
+.input-group input::placeholder {
+    color: var(--text-secondary);
+    opacity: 0.6;
+}
+
+.password-input-wrapper {
+    position: relative;
+}
+
+.password-input-wrapper input {
+    padding-right: 48px;
+}
+
+.toggle-password {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.3s ease;
+}
+
+.toggle-password:hover {
+    color: var(--text-primary);
+}
+
+.toggle-password.active {
+    color: var(--primary-color);
+}
+
+.eye-icon {
+    width: 20px;
+    height: 20px;
+    stroke-width: 2;
+}
+
+.password-hint {
+    display: block;
+    margin-top: 6px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.password-strength {
+    margin-top: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    display: none;
+}
+
+.options {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+    font-size: 14px;
+}
+
+.remember {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+}
+
+.remember input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    accent-color: var(--primary-color);
+}
+
+.remember span {
+    color: var(--text-secondary);
+}
+
+.options a,
+.back-to-login a {
+    color: var(--primary-color);
+    text-decoration: none;
+    font-weight: 600;
+    transition: opacity 0.3s ease;
+}
+
+.options a:hover,
+.back-to-login a:hover {
+    opacity: 0.8;
+}
+
+.terms {
+    margin-bottom: 24px;
+}
+
+.terms label {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    cursor: pointer;
+}
+
+.terms input[type="checkbox"] {
+    margin-top: 2px;
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    accent-color: var(--primary-color);
+    flex-shrink: 0;
+}
+
+.terms a {
+    color: var(--primary-color);
+    text-decoration: none;
+}
+
+.btn-primary {
+    width: 100%;
+    padding: 16px;
+    background: var(--primary-color);
+    border: none;
+    border-radius: 10px;
+    color: var(--bg-dark);
+    font-size: 16px;
+    font-weight: 700;
+    font-family: 'DM Sans', sans-serif;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    position: relative;
+}
+
+.btn-primary:hover {
+    background: var(--primary-dark);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(0, 255, 136, 0.3);
+}
+
+.btn-primary:active {
+    transform: translateY(0);
+}
+
+.btn-primary:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.btn-loader {
+    width: 20px;
+    height: 20px;
+    border: 3px solid var(--bg-dark);
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.error-message,
+.success-message {
+    margin-top: 16px;
+    padding: 12px 16px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    display: none;
+}
+
+.error-message {
+    background: rgba(255, 68, 68, 0.1);
+    border: 1px solid rgba(255, 68, 68, 0.3);
+    color: var(--error-color);
+}
+
+.success-message {
+    background: rgba(0, 255, 136, 0.1);
+    border: 1px solid rgba(0, 255, 136, 0.3);
+    color: var(--success-color);
+}
+
+.back-to-login {
+    margin-top: 24px;
+    text-align: center;
+    font-size: 14px;
+}
+
+/* Responsive Design */
+@media (max-width: 600px) {
+    .login-box {
+        padding: 32px 24px;
+        border-radius: 20px;
+    }
+
+    .logo h1 {
+        font-size: 36px;
+    }
+
+    .auth-form h2 {
+        font-size: 24px;
+    }
+
+    .tab-btn {
+        font-size: 14px;
+        padding: 10px;
+    }
+
+    .input-group input {
+        padding: 12px 14px;
+        font-size: 14px;
+    }
+
+    .btn-primary {
+        padding: 14px;
+        font-size: 15px;
+    }
+}
+
+/* Animation for form elements */
+.input-group input,
+.btn-primary,
+.tab-btn {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Focus states for accessibility */
+.btn-primary:focus-visible,
+.tab-btn:focus-visible,
+input:focus-visible,
+a:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
+}
+
+/* Smooth scrolling */
+html {
+    scroll-behavior: smooth;
+}
