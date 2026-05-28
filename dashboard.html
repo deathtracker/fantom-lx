@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Fantom.LX — Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="style.css"/>
+<link rel="stylesheet" href="dashboard.css"/>
+</head>
+<body class="dash-body">
+
+<div class="dash-layout">
+
+  <!-- SIDEBAR -->
+  <aside class="dash-sidebar">
+    <div class="nav-logo" style="padding:0 0 32px">Fantom<span>.LX</span></div>
+    <nav class="dash-nav">
+      <a href="#" class="dash-nav-item active">🏠 Dashboard</a>
+      <a href="#" class="dash-nav-item">📤 Upload Notes</a>
+      <a href="#" class="dash-nav-item">🃏 Flashcards</a>
+      <a href="#" class="dash-nav-item">📝 Quizzes</a>
+      <a href="#" class="dash-nav-item">📊 Progress</a>
+      <a href="#" class="dash-nav-item">📅 Study Plan</a>
+    </nav>
+    <div class="sidebar-bottom">
+      <a href="index.html" class="dash-nav-item">← Back to Home</a>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="dash-main">
+    <div class="dash-header">
+      <div>
+        <h1 class="dash-title">Good morning, Student 👋</h1>
+        <p class="dash-sub">You have 3 subjects to review today.</p>
+      </div>
+      <button class="btn-primary" id="uploadBtn">+ Upload Notes</button>
+    </div>
+
+    <!-- STATS ROW -->
+    <div class="dash-stats">
+      <div class="dash-stat-card">
+        <div class="dash-stat-icon">📄</div>
+        <div>
+          <div class="dash-stat-val">24</div>
+          <div class="dash-stat-label">Documents Uploaded</div>
+        </div>
+      </div>
+      <div class="dash-stat-card">
+        <div class="dash-stat-icon">🃏</div>
+        <div>
+          <div class="dash-stat-val">312</div>
+          <div class="dash-stat-label">Flashcards Created</div>
+        </div>
+      </div>
+      <div class="dash-stat-card">
+        <div class="dash-stat-icon">📝</div>
+        <div>
+          <div class="dash-stat-val">18</div>
+          <div class="dash-stat-label">Quizzes Completed</div>
+        </div>
+      </div>
+      <div class="dash-stat-card">
+        <div class="dash-stat-icon">🔥</div>
+        <div>
+          <div class="dash-stat-val">7</div>
+          <div class="dash-stat-label">Day Streak</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="dash-grid">
+
+      <!-- UPLOAD AREA -->
+      <div class="dash-card upload-area" id="dropZone">
+        <div class="upload-icon">📤</div>
+        <h3>Upload Your Notes</h3>
+        <p>Drag & drop your PDF, Word doc, or image here</p>
+        <button class="btn-primary" onclick="document.getElementById('fileInput').click()">Choose File</button>
+        <input type="file" id="fileInput" accept=".pdf,.doc,.docx,.png,.jpg" style="display:none"/>
+        <p class="upload-note">Supports PDF, DOC, DOCX, PNG, JPG</p>
+      </div>
+
+      <!-- SUBJECT PROGRESS -->
+      <div class="dash-card">
+        <h3 class="card-title">📊 Subject Progress</h3>
+        <div class="subject-progress">
+          <div class="subj-row">
+            <div class="subj-info"><span>🔬 Biology</span><span class="subj-pct">72%</span></div>
+            <div class="progress-bar"><div style="width:72%;background:linear-gradient(90deg,#7c3aed,#a855f7)"></div></div>
+          </div>
+          <div class="subj-row">
+            <div class="subj-info"><span>➗ Mathematics</span><span class="subj-pct good">88%</span></div>
+            <div class="progress-bar"><div style="width:88%;background:linear-gradient(90deg,#059669,#10b981)"></div></div>
+          </div>
+          <div class="subj-row">
+            <div class="subj-info"><span>📚 History</span><span class="subj-pct warn">45%</span></div>
+            <div class="progress-bar"><div style="width:45%;background:linear-gradient(90deg,#d97706,#f59e0b)"></div></div>
+          </div>
+          <div class="subj-row">
+            <div class="subj-info"><span>⚗️ Chemistry</span><span class="subj-pct">61%</span></div>
+            <div class="progress-bar"><div style="width:61%;background:linear-gradient(90deg,#7c3aed,#a855f7)"></div></div>
+          </div>
+        </div>
+        <div class="weak-alert">⚠️ History needs attention — score below 50%</div>
+      </div>
+
+      <!-- RECENT DOCS -->
+      <div class="dash-card">
+        <h3 class="card-title">📄 Recent Documents</h3>
+        <div class="doc-list">
+          <div class="doc-item">
+            <div class="doc-icon">📄</div>
+            <div class="doc-info"><strong>Cell Division Notes.pdf</strong><small>Biology · 2 hours ago</small></div>
+            <div class="doc-actions"><button class="pill-btn">Quiz</button><button class="pill-btn">Cards</button></div>
+          </div>
+          <div class="doc-item">
+            <div class="doc-icon">📄</div>
+            <div class="doc-info"><strong>WW2 Overview.docx</strong><small>History · Yesterday</small></div>
+            <div class="doc-actions"><button class="pill-btn">Quiz</button><button class="pill-btn">Cards</button></div>
+          </div>
+          <div class="doc-item">
+            <div class="doc-icon">📄</div>
+            <div class="doc-info"><strong>Algebra Chapter 5.pdf</strong><small>Mathematics · 2 days ago</small></div>
+            <div class="doc-actions"><button class="pill-btn">Quiz</button><button class="pill-btn">Cards</button></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TODAY'S PLAN -->
+      <div class="dash-card">
+        <h3 class="card-title">📅 Today's Study Plan</h3>
+        <div class="plan-list">
+          <div class="plan-item done">
+            <div class="plan-check">✓</div>
+            <div><strong>Review Biology Flashcards</strong><small>30 min · Done</small></div>
+          </div>
+          <div class="plan-item active">
+            <div class="plan-check active">●</div>
+            <div><strong>History Quiz — WW2</strong><small>20 min · In progress</small></div>
+          </div>
+          <div class="plan-item">
+            <div class="plan-check">○</div>
+            <div><strong>Chemistry Practice Test</strong><small>45 min · Upcoming</small></div>
+          </div>
+          <div class="plan-item">
+            <div class="plan-check">○</div>
+            <div><strong>Math Problem Set</strong><small>30 min · Upcoming</small></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+<!-- UPLOAD MODAL -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Processing Your Notes</h3>
+      <button class="modal-close" id="modalClose">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="processing-step done">✓ File uploaded successfully</div>
+      <div class="processing-step done">✓ Text extracted</div>
+      <div class="processing-step active">⟳ Generating AI summary...</div>
+      <div class="processing-step">○ Creating flashcards</div>
+      <div class="processing-step">○ Building quiz questions</div>
+      <div class="processing-step">○ Updating progress tracker</div>
+    </div>
+  </div>
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>
