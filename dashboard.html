@@ -24,6 +24,14 @@
       <a href="#" class="dash-nav-item">📅 Study Plan</a>
     </nav>
     <div class="sidebar-bottom">
+      <div class="user-profile">
+        <div class="user-avatar" id="userAvatar">👤</div>
+        <div class="user-info">
+          <div class="user-name" id="userName">Loading...</div>
+          <div class="user-email" id="userEmail">...</div>
+        </div>
+      </div>
+      <a href="#" class="dash-nav-item logout-btn" id="logoutBtn">🚪 Logout</a>
       <a href="index.html" class="dash-nav-item">← Back to Home</a>
     </div>
   </aside>
@@ -32,7 +40,7 @@
   <main class="dash-main">
     <div class="dash-header">
       <div>
-        <h1 class="dash-title">Good morning, Student 👋</h1>
+        <h1 class="dash-title welcome-message">Good morning, Student 👋</h1>
         <p class="dash-sub">You have 3 subjects to review today.</p>
       </div>
       <button class="btn-primary" id="uploadBtn">+ Upload Notes</button>
@@ -173,6 +181,8 @@
   </div>
 </div>
 
+<script src="auth.js"></script>
+<script src="dashboard-auth.js"></script>
 <script src="script.js"></script>
 </body>
 </html>
